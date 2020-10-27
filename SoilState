@@ -1,0 +1,92 @@
+ 
+ESP32 LoRa
+
+
+data = {
+    vbat : 3.7 ... 4.2;             [V]
+    chrg : "OK" | "CHARGE" ;
+    syst : 24;                      [°C]
+    soil : 0 ... 100:               [%]
+    t05  : 23;                      [°C]
+    t20  : 25                       [°C]
+}
+
+
+
+GPIO
+
+ADC Pins 32-39
+
+
+
+
+VBat
+=================
+GPIO 38 - ADC in
+
+Spannungsteiler Vmax = 4.2V --> 
+
+Input:
+U1:	4.2	... 3.7 V
+R1:	  1 MOhm  1000000	Ω
+R2:	820 kOhm   820000	Ω
+Widerstandsreihe:	12		
+	
+Output:
+U2:	1.89 ...1.67 V
+
+
+ADC.ATTN_6DB : 6dB attenuation, gives a maximum input voltage of approximately 2.00v
+ADC.WIDTH_12BIT: 12 bit data - this is the default configuration
+
+adc.atten(ADC.ATTN_6DB)      # set 6dB input attenuation (voltage range roughly 0.0v - 2.0 v)
+adc.width(ADC.WIDTH_12BIT)   # set 12 bit return values (returned range 0-4095)
+adc.read()
+
+
+Charge indication
+=================
+GPIO 17 - in - OK (green)
+GPIO 16 - in - CHRG (red)
+
+
+Charging Indicator:
+When there are no battery, the green LED is ON and the red LED is flashing.
+When charging, only the red LED is ON. After the charging is completed, only the green LED is ON.
+
+
+
+System-temperature
+==================
+import esp32
+esp32.raw_temperature() # read the internal temperature of the MCU, in Farenheit
+
+
+SoilMoisture
+===============
+GPIO 36 - in  - ADC
+GPIO 37 - out - VCC
+
+
+I2C (BME280)
+================
+GPIO 22 - SCL
+GPIO 21 - SDA
+GPIO 23 - out - VCC
+
+
+1-Wire (2 Stück)
+================
+GPIO 12 - Data
+GPIO 13 - out - VCC
+
+
+Be sure to put a 4.7k pull-up resistor on the data line. Note that the convert_temp() method must be called each time you want to sample the temperature.
+
+import time, ds18x20
+ds = ds18x20.DS18X20(ow)
+roms = ds.scan()
+ds.convert_temp()
+time.sleep_ms(750)
+for rom in roms:
+    print(ds.read_temp(rom))
