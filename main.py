@@ -1,94 +1,48 @@
 ######################################################################
-# LORA
-
-import ujson
-from libs.ulora import uLoRa, TTN
-
-# Refer to device pinout / schematics diagrams for pin details
-
-LORA_CS = const(18)
-LORA_SCK = const(5)
-LORA_MOSI = const(27)
-LORA_MISO = const(19)
-LORA_IRQ = const(26)
-LORA_RST = const(14)
-
-LORA_DATARATE = "SF9BW125"  # Choose from several available
-FPORT = 1
-
-# From TTN console for device
-# msb
+from libs.ulora import uLoRa, TTN  # LORA
+from machine import ADC, Pin
+import machine
+import esp32
+import time
+import ds18x20
+import onewire
+######################################################################
+# From TTN console for device (all # msb)
 DEVADDR = bytearray([0x01, 0xd1, 0x51, 0x52])
-# msb
 NWSKEY = bytearray([0x4d, 0x70, 0xe1, 0x85, 0x8e, 0xc6, 0xda, 0x11, 0x5d, 0x81, 0x6f, 0x22, 0x7e, 0xbf, 0x15, 0x8e])
-# msb
 APPSKEY = bytearray([0x54, 0xad, 0xd4, 0x4f, 0x8c, 0xbe, 0xbf, 0x8a, 0xab, 0x55, 0x5f, 0x41, 0xc0, 0x34, 0xc5, 0xf0])
-
 TTN_CONFIG = TTN(DEVADDR, NWSKEY, APPSKEY, country="EU")
 
-lora = uLoRa(
-    cs=LORA_CS,
-    sck=LORA_SCK,
-    mosi=LORA_MOSI,
-    miso=LORA_MISO,
-    irq=LORA_IRQ,
-    rst=LORA_RST,
-    ttn_config=TTN_CONFIG,
-    datarate=LORA_DATARATE,
-    fport=FPORT
-)
-
-# testdata = {"key1": "Hello",
-#             "key2": "World!"}
-#
-# data = ujson.dumps(testdata)  # dictionary to json
-# buf = bytearray(data, 'utf-8')
-
-data_list = [0x10,0x20]
-buf = bytearray(data_list)
-print(buf)
-print("send data")
-# ...Then send data as bytearray
-
-lora.send_data(buf, len(buf), lora.frame_counter)
-
+LORA_DATARATE = "SF9BW125"  # Choose from several available
+# Refer to device pinout / schematics diagrams for pin details
+lora = uLoRa(cs=18, sck=5, mosi=27, miso=19, irq=26, rst=14, ttn_config=TTN_CONFIG, datarate=LORA_DATARATE, fport=1)
 ######################################################################
 
-data_dict = {
-    "vbat": 0,
-    "chrg": False,
-    "tsys": 0,
-    "soil": 0,
-    "t_05": 0,
-    "t_20": 0
-}
+def get_values():
+    data_dict = {}
 
-from machine import ADC, Pin
-def get_vbat():
+    # vbat
     adc = ADC(Pin(38))  # create ADC object on ADC pin
     adc.atten(ADC.ATTN_6DB)  # set 6dB input attenuation (voltage range roughly 0.0v - 2.0 v)
     adc.width(ADC.WIDTH_12BIT)  # set 12 bit return values (returned range 0-4095)
     v_raw = adc.read()
-    return v_raw  # calculate vbat
+    data_dict["vbat"] = v_raw # calculate vbat
 
-
-def get_chargestate():
+    #chargestate
     pin_ok = Pin(17, Pin.IN)   # GPIO 17 - in - OK(green)
     pin_ch = Pin(16, Pin.IN)   # GPIO 16 - in - CHRG(red)
-    return pin_ch.value()
+    if pin_ch.value():
+        data_dict["chrg"] = 1
+    else:
+        data_dict["chrg"] = 0
 
-
-import esp32
-def get_temp_system():
+    # system temperature
     t_raw = esp32.raw_temperature()  # read the internal temperature of the MCU, in Farenheit
-    return t_raw  # calculate temp in C
+    data_dict["tsys"] = t_raw
 
-
-import time
-def get_soil_value():
+    # soil humi
     pin_en = Pin(0, Pin.OUT)  # GPIO 37 - out - VCC
     pin_en.on()  # set pin to "on" (high) level
-
     adc = ADC(Pin(36))  # GPIO 36 - in - ADC
     adc.atten(ADC.ATTN_6DB)  # set 6dB input attenuation (voltage range roughly 0.0v - 2.0 v)
     adc.width(ADC.WIDTH_12BIT)  # set 12 bit return values (returned range 0-4095)
@@ -96,22 +50,67 @@ def get_soil_value():
     time.sleep_ms(200)  # wait for adc and sensor
     soil_raw = adc.read()
     soil_raw = adc.read()
-
     pin_en.off()  # set pin to "off" (low) level
+    data_dict["soil"] = soil_raw  # calculate soil value
 
-    return soil_raw  # calculate soil value
+    # onwire
+    ow = onewire.OneWire(Pin(12))  # create a OneWire bus on GPIO12
+    ds = ds18x20.DS18X20(ow)
+    rom_t5 = ""
+    rom_t20 = ""
 
-
-import time
-import ds18x20
-import onewire
-ow = onewire.OneWire(Pin(12))  # create a OneWire bus on GPIO12
-ds = ds18x20.DS18X20(ow)
-rom_t5 = ""
-rom_t20 = ""
-
-def get_soil_temp(ow_ds,rom):
-    ow_ds.convert_temp()
+    # onewire 5 cm
+    ds.convert_temp()
     time.sleep_ms(750)
-    t_raw = ow_ds.read_temp(rom)
-    return t_raw # calulate temp
+    t5_raw = ds.read_temp(rom_t5)
+    data_dict["t5"] = t5_raw
+
+    # onewire 5 cm
+    ds.convert_temp()
+    time.sleep_ms(750)
+    t20_raw = ds.read_temp(rom_t20)
+    data_dict["t20"] = t20_raw
+
+    print(data_dict)
+    for k, v in data_dict:
+        print(k, v)
+
+    return data_dict
+
+######################################################################
+# check if the device woke from a deep sleep
+
+def send_data(lora_instance,data):
+
+    data_list = []
+    for k, v in data:
+        print(k, v)
+        data_list.append(v)
+
+    buf = bytearray(data_list)
+    print(buf)
+    print("send data")
+    # ...Then send data as bytearray
+    lora.send_data(buf, len(buf), lora.frame_counter)
+
+
+# sleep_cnt = 0
+# deepsleep_ms = const(60000)
+# deepsleep_minutes = const(10)
+#
+#
+# if machine.reset_cause() == machine.DEEPSLEEP_RESET:
+#     print('woke from a deep sleep')
+#     if sleep_cnt == deepsleep_minutes:
+#         sleep_cnt = 0
+#         # send_data(lora_instance=lora, data=get_values())
+#         machine.deepsleep(deepsleep_ms)
+#     else:
+#         sleep_cnt += 1
+#         print("")
+# else:
+#     # put the device to sleep for 60 seconds
+#     machine.deepsleep(deepsleep_ms)
+
+
+

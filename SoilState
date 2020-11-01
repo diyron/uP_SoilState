@@ -15,6 +15,17 @@ data = {
 
 GPIO
 
+GPIO 38 - ADC in - vbat
+GPIO 17 - in - energy OK (green)
+GPIO 16 - in - energy CHRG (red)
+GPIO 36 - in  - soil ADC
+GPIO 37 - out - soil VCC
+GPIO 12 - Data - 1W
+GPIO 13 - out - VCC - 1W
+
+
+
+
 ADC Pins 32-39
 
 
@@ -68,7 +79,7 @@ GPIO 36 - in  - ADC
 GPIO 37 - out - VCC
 
 
-I2C (BME280)
+entfällt I2C (BME280)
 ================
 GPIO 22 - SCL
 GPIO 21 - SDA
